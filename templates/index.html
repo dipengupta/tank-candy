@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tank Candy</title>
+    <meta
+      name="description"
+      content="Visualize what it would cost to fill different vehicles across U.S. states and dates."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="bg-orb bg-orb-a"></div>
+      <div class="bg-orb bg-orb-b"></div>
+      <div class="bg-grid"></div>
+
+      <main class="app-frame">
+        <section class="hero">
+          <div class="hero-copy">
+            <h1>See the full-tank hit before you hit the pump.</h1>
+            <p class="hero-text">
+              Pick a vehicle, a state, and any date you want. The app estimates
+              what a zero-to-full fill-up would cost using AAA daily averages
+              and EIA historical fuel data.
+            </p>
+            <label class="input-stack hero-date-picker" for="date-slider">
+              <span>Scrub the timeline</span>
+              <div class="date-slider-card">
+                <div class="date-slider-header">
+                  <strong class="date-slider-display" id="date-slider-display">{{ bootstrap.ui.defaultDateLabel }}</strong>
+                  <span class="date-slider-caption" id="date-slider-caption">{{ bootstrap.ui.defaultDateCaption }}</span>
+                </div>
+                <input id="date-slider" type="range">
+                <div class="date-slider-scale">
+                  <span id="date-slider-min-label">{{ bootstrap.ui.minDateLabel }}</span>
+                  <span id="date-slider-max-label">{{ bootstrap.ui.maxDateLabel }}</span>
+                </div>
+                <div class="date-precision-row">
+                  <button type="button" class="date-step-button" id="date-step-back">-1 day</button>
+                  <label class="date-precision-input" for="date-input">
+                    <span>Exact date</span>
+                    <input id="date-input" type="date">
+                  </label>
+                  <button type="button" class="date-step-button" id="date-step-forward">+1 day</button>
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <div class="hero-result" id="hero-result">
+            <div class="result-glow"></div>
+            <div class="hero-badge" id="source-pill">Loading quote...</div>
+            <div class="hero-showcase">
+              <div class="hero-visual" id="hero-visual"></div>
+              <div class="hero-stats">
+                <div class="stat-card hero-stat-card">
+                  <span class="stat-label">Vehicle</span>
+                  <strong class="stat-value" id="vehicle-name">{{ bootstrap.ui.defaultVehicleName }}</strong>
+                </div>
+                <p class="hero-meta-line">
+                  <span>State <strong id="state-name">{{ bootstrap.ui.defaultStateName }}</strong></span>
+                  <span>Tank <strong id="tank-capacity">{{ bootstrap.ui.defaultTankCapacityLabel }}</strong></span>
+                  <span>Fuel <strong id="fuel-type">{{ bootstrap.ui.defaultFuelTypeLabel }}</strong></span>
+                </p>
+              </div>
+            </div>
+            <div class="hero-metrics">
+              <div class="metric-card">
+                <span class="metric-label">Fill-up total</span>
+                <strong class="metric-value" id="total-cost">$0.00</strong>
+                <span class="metric-subvalue" id="total-cost-delta">Comparing with today...</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Avg. price</span>
+                <strong class="metric-value" id="price-per-gallon">$0.000</strong>
+                <span class="metric-subvalue" id="price-per-gallon-delta">Comparing with today...</span>
+              </div>
+            </div>
+            <p class="hero-summary" id="hero-summary">
+              Pulling the current quote...
+            </p>
+            <div class="tank-graphic">
+              <div class="tank-graphic-copy">
+                <span class="tank-kicker">Tank size visual</span>
+                <span class="tank-bar-label" id="tank-capacity-label">{{ bootstrap.ui.defaultTankCapacityLabel }} tank</span>
+              </div>
+              <div class="tank-graphic-shell">
+                <div class="tank-graphic-window">
+                  <span class="tank-liquid" id="tank-liquid"></span>
+                </div>
+                <span class="tank-graphic-cap"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard">
+          <div class="controls-column">
+            <article class="panel compact-controls">
+              <h2>Dial in your quote</h2>
+
+              <div class="compact-grid">
+                <div class="compact-map compact-location">
+                  <div class="controls-heading-row">
+                    <h3 class="section-label">Location</h3>
+                    <label class="input-stack state-select-wrap" for="state-select">
+                      <span>State</span>
+                      <select id="state-select"></select>
+                    </label>
+                  </div>
+                  <div class="tile-map-wrap">
+                    <div class="tile-map" id="tile-map" aria-label="Interactive U.S. state map"></div>
+                  </div>
+                </div>
+
+                <div class="compact-vehicles">
+                  <h3 class="section-label">Vehicle</h3>
+                  <div class="vehicle-gallery" id="vehicle-gallery"></div>
+                </div>
+              </div>
+
+            </article>
+          </div>
+        </section>
+
+        <section class="source-section">
+          <article class="panel">
+            <h2>Where the numbers come from</h2>
+            <div class="source-card">
+              <div class="source-card-header">
+                <div class="source-copy">
+                  <p class="source-title" id="source-title">Waiting for source details...</p>
+                  <p class="source-detail" id="source-detail"></p>
+                </div>
+                <div class="source-links" id="source-links"></div>
+              </div>
+              <p class="source-note" id="source-note"></p>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      window.APP_BOOTSTRAP = {{ bootstrap|tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>
