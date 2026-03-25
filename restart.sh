@@ -98,6 +98,9 @@ find_existing_pids() {
       if [[ "$cmdline" == *"flask --app app run --debug --host "* && "$cmdline" == *" --port $PORT"* ]]; then
         remember_pid "$pid"
       fi
+      if [[ "$cmdline" == *"flask --app app:create_app run --debug --host "* && "$cmdline" == *" --port $PORT"* ]]; then
+        remember_pid "$pid"
+      fi
     done < <(ps -eo pid=,args=)
   fi
 
@@ -118,7 +121,7 @@ done < <(find_existing_pids)
 
 FLASK_BIN="$(find_flask_bin)"
 
-nohup "$FLASK_BIN" --app app run --debug --host "$HOST" --port "$PORT" >/dev/null 2>&1 &
+nohup "$FLASK_BIN" --app app:create_app run --debug --host "$HOST" --port "$PORT" >/dev/null 2>&1 &
 server_pid=$!
 
 printf 'Server restarted.\n'

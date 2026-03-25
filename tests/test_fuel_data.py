@@ -4,6 +4,7 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
+from app import create_app
 from fuel_repository import FuelRepository
 from fuel_service import FuelDataService
 from fuel_sync import FuelSyncService
@@ -186,6 +187,45 @@ def test_service_uses_direct_state_history_when_available(tmp_path: Path) -> Non
     assert quote["isEstimated"] is False
     assert quote["pricePerGallon"] == 3.99
     assert quote["source"]["label"] == "Stored EIA weekly state series"
+
+
+def test_health_endpoint_reports_database_state(tmp_path: Path) -> None:
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(
+        json.dumps(
+            {
+                "daily_snapshots": [
+                    {
+                        "snapshot_date": "2026-03-24",
+                        "states": {
+                            "PA": {
+                                "regular": 3.95,
+                                "mid_grade": 4.35,
+                                "premium": 4.7,
+                                "diesel": 4.8,
+                            }
+                        },
+                    }
+                ],
+                "history": {},
+            }
+        )
+    )
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE_PATH": tmp_path / "fuel_prices.db",
+            "SEED_DATA_PATH": seed_path,
+        }
+    )
+
+    with app.test_client() as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json["status"] == "ok"
+    assert response.json["hasData"] is True
+    assert response.json["latestSnapshotDate"] == "2026-03-24"
 
 
 class FakeSourceClient:

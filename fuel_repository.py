@@ -143,6 +143,28 @@ class FuelRepository:
             ).fetchone()[0]
         return bool(current_count or history_count)
 
+    def get_health_snapshot(self) -> dict[str, Any]:
+        with self._connect() as connection:
+            connection.execute("SELECT 1").fetchone()
+            daily_snapshots = connection.execute(
+                "SELECT COUNT(*) FROM daily_state_prices"
+            ).fetchone()[0]
+            history_rows = connection.execute(
+                "SELECT COUNT(*) FROM fuel_history"
+            ).fetchone()[0]
+            latest_snapshot_date = connection.execute(
+                "SELECT MAX(snapshot_date) FROM daily_state_prices"
+            ).fetchone()[0]
+
+        return {
+            "status": "ok",
+            "database": "sqlite",
+            "hasData": bool(daily_snapshots or history_rows),
+            "dailySnapshotCount": daily_snapshots,
+            "historyRowCount": history_rows,
+            "latestSnapshotDate": latest_snapshot_date,
+        }
+
     def upsert_daily_snapshot(
         self, snapshot_date: str, states: dict[str, dict[str, float]]
     ) -> int:

@@ -7,6 +7,7 @@ Single-page Flask app for visualizing what it costs to fill different vehicles, 
 - The web app reads fuel data from SQLite only.
 - A separate scheduler process refreshes upstream data on a schedule.
 - The app ships with a bundled seed dataset at `data/seed_fuel_data.json`, so a brand-new machine still has data to display before the first scheduled refresh runs.
+- Production containers run behind Gunicorn and expose `GET /health` for platform health checks.
 
 ## Data flow
 
@@ -63,17 +64,27 @@ Single-page Flask app for visualizing what it costs to fill different vehicles, 
 
 - If the scheduler is not running and `refresh-now` has not been executed recently, the app will show whatever is already stored in SQLite or bundled in the seed file.
 
-## Local run
+## Local development
+
+Fastest inner-loop workflow:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m fuel_jobs refresh-now
-flask --app app run --debug
+flask --app app:create_app run --debug
 ```
 
 Open `http://127.0.0.1:5000`.
+
+The Flask dev server is still the right default when you are actively changing Python, templates, or frontend assets. It gives you better error pages and faster feedback than Gunicorn.
+
+To confirm the app boots and the database is reachable:
+
+```bash
+curl http://127.0.0.1:5000/health
+```
 
 To restart the Flask dev server later without retyping the command:
 
@@ -82,8 +93,7 @@ To restart the Flask dev server later without retyping the command:
 ```
 
 The helper stops the existing Flask dev server by matching the current app process and listening port, then starts it again in the background without writing PID or log files.
-If you are running through Docker Compose, `./restart.sh` will restart only the Flask process inside the running `web` container without recreating the container.
-After pulling this change, run `docker compose up -d --build web` once so the container starts with the new supervisor command.
+If you are running through Docker Compose, `./restart.sh` will restart only the `web` process inside the running container without recreating the container.
 
 ## Scheduler
 
@@ -114,7 +124,7 @@ Build the image:
 docker build -t gas-price-project:test .
 ```
 
-Run both the web app and scheduler:
+Run the local development stack:
 
 ```bash
 docker compose up --build
@@ -127,9 +137,59 @@ Services:
 - `web`: Flask dev server exposed on host port `5001`
 - `scheduler`: separate process that refreshes stored data into the shared SQLite volume
 
+For local Compose only, both containers run as `root` so they can write to the shared Docker volume consistently across rebuilds. The production image still runs as the non-root `appuser`.
+
+If you want to exercise the same app server used in deployment, run Compose with Gunicorn:
+
+```bash
+WEB_SERVER=gunicorn docker compose up --build web scheduler
+```
+
+Or run the production image directly:
+
+```bash
+docker run --rm -p 5000:5000 gas-price-project:test
+```
+
+Then check:
+
+```bash
+curl http://127.0.0.1:5000/health
+```
+
+## Deployment workflow
+
+For deployment, you do not need a separate code path from local. The Docker image now starts Gunicorn through `start-web.sh`, reads `PORT` from the environment, and exposes `/health`.
+
+Recommended platform settings:
+
+- Web health check path: `/health`
+- `DATABASE_PATH=/app/runtime-data/fuel_prices.db`
+- `SEED_DATA_PATH=/app/data/seed_fuel_data.json`
+- `APP_TIMEZONE=America/New_York`
+
+Optional Gunicorn tuning for a small hobby app:
+
+- `WEB_CONCURRENCY=1`
+- `GUNICORN_THREADS=4`
+- Increase `WEB_CONCURRENCY` only if you actually see concurrent traffic pressure
+
+Because this app stores data in SQLite, the local Docker setup keeps the scheduler as a separate process sharing the same volume as the web process.
+
+For Render specifically, plan around platform disk limits:
+
+- a persistent disk is attached to only one service at a time
+- cron jobs cannot access persistent disks
+
+That means a Render web service and a separate Render worker or cron job cannot both read and write the same SQLite file on disk. For this project, the practical options are:
+
+- keep it as a simple single-service hobby app and refresh data manually or from within that same service
+- move storage to Postgres if you want a cleaner split between web and background refresh jobs on Render
+
 ## Important files
 
 - `app.py`: Flask entrypoint
+- `gunicorn.conf.py`: production Gunicorn defaults
 - `fuel_service.py`: quote generation from stored data
 - `fuel_repository.py`: SQLite schema and queries
 - `fuel_sync.py`: source scraping/parsing and persistence
