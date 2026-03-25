@@ -34,6 +34,9 @@ class QuoteSource:
 
 
 class FuelDataService:
+    STARTING_TANK_LEVEL = 0.10
+    REFILL_SHARE = 1.0 - STARTING_TANK_LEVEL
+
     def __init__(self, repository: FuelRepository):
         self.repository = repository
 
@@ -95,7 +98,8 @@ class FuelDataService:
             requested_date=requested_date,
             fuel_type=fuel_type,
         )
-        total_cost = round(price_info["price_per_gallon"] * vehicle.tank_capacity, 2)
+        gallons_to_fill = vehicle.tank_capacity * self.REFILL_SHARE
+        total_cost = round(price_info["price_per_gallon"] * gallons_to_fill, 2)
 
         return {
             "requestedDate": requested_date.isoformat(),
@@ -106,10 +110,13 @@ class FuelDataService:
             },
             "vehicle": vehicle.as_dict(),
             "fuelType": vehicle.fuel_type,
+            "startingFuelLevel": self.STARTING_TANK_LEVEL,
+            "fillShare": self.REFILL_SHARE,
             "tankCapacityGallons": vehicle.tank_capacity,
+            "gallonsToFill": round(gallons_to_fill, 2),
             "pricePerGallon": price_info["price_per_gallon"],
             "totalCost": total_cost,
-            "headline": self._build_headline(vehicle.name, vehicle.fuel_type, state_code, total_cost),
+            "headline": self._build_headline(vehicle.name, state_code, total_cost),
             "source": price_info["source"].as_dict(),
             "dateNote": price_info["date_note"],
             "isEstimated": price_info["is_estimated"],
@@ -294,12 +301,12 @@ class FuelDataService:
         return max(0.72, min(1.35, multiplier))
 
     @staticmethod
-    def _build_headline(
-        vehicle_name: str, fuel_type: str, state_code: str, total_cost: float
-    ) -> str:
-        label = "fill-up" if fuel_type == "regular" else "diesel fill-up"
+    def _build_headline(vehicle_name: str, state_code: str, total_cost: float) -> str:
         state_name = STATE_INFO[state_code]["name"]
-        return f"A full {vehicle_name.lower()} {label} in {state_name} is about ${total_cost:,.2f}."
+        return (
+            f"Refilling a {vehicle_name.lower()} from 10% to full in "
+            f"{state_name} is about ${total_cost:,.2f}."
+        )
 
     @staticmethod
     def _weekly_note(requested_date: date, target_week: date) -> str:

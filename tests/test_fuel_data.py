@@ -76,8 +76,37 @@ def test_service_uses_exact_stored_daily_snapshot(tmp_path: Path) -> None:
     quote = service.get_quote("PA", today, "sedan")
 
     assert quote["pricePerGallon"] == 3.95
+    assert quote["startingFuelLevel"] == 0.10
+    assert quote["fillShare"] == 0.90
+    assert quote["gallonsToFill"] == 13.95
+    assert quote["totalCost"] == 55.1
     assert quote["source"]["label"] == "Stored AAA daily state snapshot"
     assert quote["isEstimated"] is False
+
+
+def test_service_supports_motorcycle_vehicle_types(tmp_path: Path) -> None:
+    today = date.today().isoformat()
+    repository = build_repository(tmp_path)
+    repository.upsert_daily_snapshot(
+        today,
+        {
+            "PA": {
+                "regular": 4.0,
+                "mid_grade": 4.35,
+                "premium": 4.7,
+                "diesel": 4.8,
+            }
+        },
+    )
+
+    service = FuelDataService(repository)
+    quote = service.get_quote("PA", today, "touring_bike")
+
+    assert quote["vehicle"]["name"] == "Touring Bike"
+    assert quote["tankCapacityGallons"] == 6.1
+    assert quote["fuelType"] == "regular"
+    assert quote["gallonsToFill"] == 5.49
+    assert quote["totalCost"] == 21.96
 
 
 def test_service_falls_back_to_latest_stored_snapshot_for_today(tmp_path: Path) -> None:
@@ -100,6 +129,7 @@ def test_service_falls_back_to_latest_stored_snapshot_for_today(tmp_path: Path) 
     quote = service.get_quote("PA", today.isoformat(), "sedan")
 
     assert quote["pricePerGallon"] == 3.91
+    assert quote["totalCost"] == 54.54
     assert quote["source"]["label"] == "Latest stored AAA state snapshot"
     assert quote["isEstimated"] is False
 

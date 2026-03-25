@@ -5,10 +5,43 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST="${FLASK_HOST:-127.0.0.1}"
 PORT="${FLASK_PORT:-5000}"
+DOCKER_URL="${DOCKER_URL:-http://127.0.0.1:5001}"
 
 cd "$ROOT_DIR"
 
-declare -A SEEN_PIDS=()
+# Bash 3.2 on macOS does not support associative arrays.
+# Track seen PIDs in a newline-delimited string instead.
+SEEN_PIDS=$'\n'
+
+docker_compose_available() {
+  command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
+}
+
+docker_web_running() {
+  local container_id
+  container_id="$(docker compose ps -q web 2>/dev/null || true)"
+  [[ -n "$container_id" ]]
+}
+
+docker_web_uses_restartable_supervisor() {
+  local pid_one
+  pid_one="$(docker compose exec -T web sh -lc 'ps -o args= 1' 2>/dev/null || true)"
+  [[ "$pid_one" == *"container-web.sh"* ]]
+}
+
+restart_docker_web() {
+  if ! docker_web_uses_restartable_supervisor; then
+    printf '%s\n' \
+      "The running web container is still using the old startup command." \
+      "Run 'docker compose up -d --build web' once, then use ./restart.sh for in-place restarts." >&2
+    exit 1
+  fi
+
+  docker compose kill -s USR1 web >/dev/null
+  printf 'Docker web server restarted.\n'
+  printf 'URL: %s\n' "$DOCKER_URL"
+  exit 0
+}
 
 find_flask_bin() {
   if [[ -x "$ROOT_DIR/.venv/bin/flask" ]]; then
@@ -49,11 +82,13 @@ remember_pid() {
 
   [[ "$pid" =~ ^[0-9]+$ ]] || return 0
 
-  if [[ -n "${SEEN_PIDS[$pid]+x}" ]]; then
-    return 0
-  fi
+  case "$SEEN_PIDS" in
+    *$'\n'"$pid"$'\n'*)
+      return 0
+      ;;
+  esac
 
-  SEEN_PIDS["$pid"]=1
+  SEEN_PIDS+="$pid"$'\n'
   printf '%s\n' "$pid"
 }
 
@@ -72,6 +107,10 @@ find_existing_pids() {
     done < <(lsof -ti tcp:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
   fi
 }
+
+if docker_compose_available && docker_web_running; then
+  restart_docker_web
+fi
 
 while IFS= read -r pid; do
   stop_pid "$pid"

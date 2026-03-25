@@ -391,22 +391,22 @@ function buildHeroSummary(quote, todayQuote) {
     return quote.headline;
   }
 
-  const fillupLabel = quote.fuelType === "diesel" ? "diesel fill-up" : "fill-up";
   const priceDelta = todayQuote.totalCost - quote.totalCost;
   const amount = formatCurrency(Math.abs(priceDelta));
   const requestedDateLabel = formatLongDate(quote.requestedDate);
+  const refillContext = `Refilling a ${quote.vehicle.name.toLowerCase()} from 10% to full in ${quote.requestedState.name}`;
 
   if (Math.abs(priceDelta) < 0.005) {
-    return `A full ${quote.vehicle.name.toLowerCase()} ${fillupLabel} in ${quote.requestedState.name} was about ${formatCurrency(quote.totalCost)} on ${requestedDateLabel}, about the same as today.`;
+    return `${refillContext} was about ${formatCurrency(quote.totalCost)} on ${requestedDateLabel}, about the same as today.`;
   }
 
   const comparisonWord = priceDelta > 0 ? "cheaper" : "more expensive";
-  return `A full ${quote.vehicle.name.toLowerCase()} ${fillupLabel} in ${quote.requestedState.name} was about ${formatCurrency(quote.totalCost)} on ${requestedDateLabel}, about ${amount} ${comparisonWord} than today.`;
+  return `${refillContext} was about ${formatCurrency(quote.totalCost)} on ${requestedDateLabel}, about ${amount} ${comparisonWord} than today.`;
 }
 
 function renderComparison(quote, todayQuote) {
   if (quote.requestedDate === bootstrap.defaults.maxDate) {
-    totalCostDelta.textContent = "This is today's tank total.";
+    totalCostDelta.textContent = "This is today's tank total, assuming the tank starts at 10% full.";
     pricePerGallonDelta.textContent = "This is today's price per gallon.";
     return;
   }
@@ -421,7 +421,7 @@ function renderComparison(quote, todayQuote) {
   const totalDelta = quote.totalCost - todayQuote.totalCost;
 
   pricePerGallonDelta.textContent = buildDeltaLine(gallonDelta, 3, "gallon");
-  totalCostDelta.textContent = buildDeltaLine(totalDelta, 2, "tank");
+  totalCostDelta.textContent = buildDeltaLine(totalDelta, 2, "refill");
 }
 
 function buildHeroBadgeText(quote) {
@@ -453,11 +453,11 @@ function buildDeltaLine(value, decimals, unit) {
   if (Math.abs(value) < 0.005) {
     return unit === "gallon"
       ? "About the same per gallon as today."
-      : "About the same per tank as today.";
+      : "About the same for this refill as today.";
   }
   return unit === "gallon"
     ? `${formatSignedCurrency(value, decimals)}/gal versus today`
-    : `${formatSignedCurrency(value, decimals)} per tank versus today`;
+    : `${formatSignedCurrency(value, decimals)} per refill versus today`;
 }
 
 function formatLongDate(value) {
@@ -525,6 +525,28 @@ function buildVehicleSvg(kind, accent, large = false) {
   `;
 
   const bodies = {
+    scooter: `
+      <circle cx="126" cy="86" r="12" fill="#ffeccc" stroke="${stroke}" stroke-width="8"></circle>
+      <path d="M126 98 L146 116 L188 116 L210 90 L232 90" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M170 54 L194 54 L208 90 L186 114 L152 114 L138 90 Z" fill="${accent}" stroke="${stroke}" stroke-width="8" stroke-linejoin="round"></path>
+      <path d="M200 56 L222 48 L232 54" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M152 118 L114 118" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round"></path>
+    `,
+    motorcycle: `
+      <path d="M118 116 L148 86 L184 86 L214 112 L246 96" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M152 60 L192 60 L206 84 L160 84 Z" fill="${accent}" stroke="${stroke}" stroke-width="8" stroke-linejoin="round"></path>
+      <path d="M198 60 L218 50 L232 58" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M170 88 L154 114 L200 114 L214 92" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M144 114 L112 114" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round"></path>
+    `,
+    touring_bike: `
+      <path d="M108 118 L146 88 L196 88 L226 112 L258 96" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M146 62 L198 62 L214 86 L152 86 Z" fill="${accent}" stroke="${stroke}" stroke-width="8" stroke-linejoin="round"></path>
+      <path d="M202 62 L226 52 L242 60" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <path d="M162 90 L146 116 L214 116 L226 94" fill="none" stroke="${stroke}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"></path>
+      <rect x="198" y="70" width="34" height="22" rx="5" fill="#fff4e1" stroke="${stroke}" stroke-width="8"></rect>
+      <rect x="134" y="70" width="24" height="20" rx="5" fill="#ffe7c9" stroke="${stroke}" stroke-width="8"></rect>
+    `,
     hatchback: `
       <path d="M48 112 L98 70 L196 70 L236 92 L274 92 L294 112 L300 132 L40 132 Z" fill="${accent}" stroke="${stroke}" stroke-width="8" stroke-linejoin="round"></path>
       <path d="M114 72 L150 72 L140 102 L82 102 Z" fill="#ffe8c7" stroke="${stroke}" stroke-width="8" stroke-linejoin="round"></path>
@@ -585,8 +607,17 @@ function buildVehicleSvg(kind, accent, large = false) {
     `,
   };
 
-  const frontBumper = kind === "semi" ? "" : `<rect x="28" y="126" width="292" height="10" rx="5" fill="#10203f" opacity="0.14"></rect>`;
-  const standardWheels = kind === "semi" ? "" : `${wheel(96, 140, 18)}${wheel(258, 140, 18)}`;
+  const frontBumper = ["semi", "scooter", "motorcycle", "touring_bike"].includes(kind)
+    ? ""
+    : `<rect x="28" y="126" width="292" height="10" rx="5" fill="#10203f" opacity="0.14"></rect>`;
+  const standardWheels = ["semi", "scooter", "motorcycle", "touring_bike"].includes(kind)
+    ? ""
+    : `${wheel(96, 140, 18)}${wheel(258, 140, 18)}`;
+  const motorcycleWheels = kind === "scooter"
+    ? `${wheel(122, 136, 16)}${wheel(242, 136, 16)}`
+    : ["motorcycle", "touring_bike"].includes(kind)
+      ? `${wheel(118, 136, 18)}${wheel(254, 136, 18)}`
+      : "";
 
   return `
     <svg viewBox="0 0 360 170" width="${width}" height="${height}" role="img" aria-label="${kind}">
@@ -594,6 +625,7 @@ function buildVehicleSvg(kind, accent, large = false) {
       ${bodies[kind]}
       ${frontBumper}
       ${standardWheels}
+      ${motorcycleWheels}
     </svg>
   `;
 }

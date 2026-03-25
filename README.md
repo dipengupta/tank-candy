@@ -1,6 +1,6 @@
 # Tank Candy
 
-Single-page Flask app for visualizing what it costs to fill different vehicles from empty across U.S. states and dates.
+Single-page Flask app for visualizing what it costs to fill different vehicles, including motorcycles, from empty across U.S. states and dates.
 
 ## Architecture
 
@@ -82,6 +82,8 @@ To restart the Flask dev server later without retyping the command:
 ```
 
 The helper stops the existing Flask dev server by matching the current app process and listening port, then starts it again in the background without writing PID or log files.
+If you are running through Docker Compose, `./restart.sh` will restart only the Flask process inside the running `web` container without recreating the container.
+After pulling this change, run `docker compose up -d --build web` once so the container starts with the new supervisor command.
 
 ## Scheduler
 
@@ -118,9 +120,11 @@ Run both the web app and scheduler:
 docker compose up --build
 ```
 
+Open `http://127.0.0.1:5001`.
+
 Services:
 
-- `web`: Flask dev server on port `5000`
+- `web`: Flask dev server exposed on host port `5001`
 - `scheduler`: separate process that refreshes stored data into the shared SQLite volume
 
 ## Important files

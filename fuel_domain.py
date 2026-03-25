@@ -169,6 +169,36 @@ class VehicleSpec:
 
 VEHICLES = [
     VehicleSpec(
+        id="scooter",
+        name="Scooter",
+        label="City scooter",
+        tank_capacity=2.4,
+        fuel_type="regular",
+        accent="#ff7c68",
+        tagline="Tiny tank, tiny bill, perfect for quick city hops.",
+        silhouette="scooter",
+    ),
+    VehicleSpec(
+        id="motorcycle",
+        name="Motorcycle",
+        label="Standard bike",
+        tank_capacity=4.5,
+        fuel_type="regular",
+        accent="#ff9852",
+        tagline="A middleweight ride with a much lighter fill-up.",
+        silhouette="motorcycle",
+    ),
+    VehicleSpec(
+        id="touring_bike",
+        name="Touring Bike",
+        label="Touring bike",
+        tank_capacity=6.1,
+        fuel_type="regular",
+        accent="#ffb347",
+        tagline="Built for longer rides, with a larger tank to match.",
+        silhouette="touring_bike",
+    ),
+    VehicleSpec(
         id="hatchback",
         name="Hatchback",
         label="Compact hatch",
