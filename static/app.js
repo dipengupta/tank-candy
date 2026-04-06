@@ -9,16 +9,6 @@ const state = {
   sliderRefreshTimer: null,
 };
 
-const regionColors = {
-  new_england: "#6cc6ff",
-  central_atlantic: "#4f9dff",
-  lower_atlantic: "#5fd7d2",
-  midwest: "#7fd8a1",
-  gulf_coast: "#16c2a3",
-  rocky_mountain: "#2aa8ff",
-  west_coast: "#7e91ff",
-};
-
 const vehicleGallery = document.getElementById("vehicle-gallery");
 const tileMap = document.getElementById("tile-map");
 const stateSelect = document.getElementById("state-select");
@@ -119,7 +109,8 @@ function renderTileMap() {
     button.className = "state-tile";
     button.style.gridRow = String(item.tileRow + 1);
     button.style.gridColumn = String(item.tileColumn + 1);
-    button.style.setProperty("--tile-color", regionColors[item.region]);
+    button.style.setProperty("--tile-color", "rgba(16, 32, 63, 0.14)");
+    button.style.setProperty("--tile-ink", "#10203f");
     button.dataset.state = item.code;
     button.title = item.name;
     button.innerHTML = `<span>${item.code}</span>`;
@@ -270,11 +261,22 @@ async function refreshQuote() {
             },
             state.requestController.signal,
           );
+    const mapRequest = fetchMapSnapshot(
+      {
+        vehicle: state.selectedVehicle,
+        date: state.selectedDate,
+      },
+      state.requestController.signal,
+    );
 
-    const [quoteResult, comparisonResult] = await Promise.allSettled([
+    const [quoteResult, comparisonResult, mapResult] = await Promise.allSettled([
       quoteRequest,
       comparisonRequest,
+      mapRequest,
     ]);
+    if (mapResult.status === "fulfilled") {
+      applyMapSnapshot(mapResult.value);
+    }
     if (quoteResult.status === "rejected") {
       throw quoteResult.reason;
     }
@@ -302,6 +304,40 @@ async function fetchQuote(params, signal) {
     throw new Error(payload.error || "Unable to load quote.");
   }
   return payload;
+}
+
+async function fetchMapSnapshot(params, signal) {
+  const query = new URLSearchParams(params);
+  const response = await fetch(`/api/map?${query.toString()}`, { signal });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Unable to load map data.");
+  }
+  return payload;
+}
+
+function applyMapSnapshot(snapshot) {
+  const totals = snapshot.states.map((item) => item.totalCost);
+  const minCost = Math.min(...totals);
+  const maxCost = Math.max(...totals);
+  const stateCosts = Object.fromEntries(snapshot.states.map((item) => [item.code, item]));
+  const requestedDateLabel = formatLongDate(snapshot.requestedDate);
+
+  document.querySelectorAll(".state-tile").forEach((tile) => {
+    const entry = stateCosts[tile.dataset.state];
+    if (!entry) {
+      return;
+    }
+
+    const intensity = normalizeRange(entry.totalCost, minCost, maxCost);
+    tile.style.setProperty("--tile-color", buildCostTileColor(intensity));
+    tile.style.setProperty("--tile-ink", intensity >= 0.58 ? "#fffaf2" : "#10203f");
+    tile.title = `${entry.name}: ${formatCurrency(entry.totalCost)} refill - $${entry.pricePerGallon.toFixed(3)}/gal`;
+    tile.setAttribute(
+      "aria-label",
+      `${entry.name} refill cost ${formatCurrency(entry.totalCost)} on ${requestedDateLabel}`,
+    );
+  });
 }
 
 function applyQuote(quote, todayQuote) {
@@ -447,6 +483,21 @@ function formatSignedCurrency(value, decimals) {
 
 function formatCurrency(value) {
   return `$${Number(value).toFixed(2)}`;
+}
+
+function normalizeRange(value, min, max) {
+  if (max <= min) {
+    return 0.5;
+  }
+  return (value - min) / (max - min);
+}
+
+function buildCostTileColor(intensity) {
+  const eased = Math.pow(intensity, 0.85);
+  const hue = 42 - eased * 8;
+  const saturation = 52 + eased * 18;
+  const lightness = 95 - eased * 43;
+  return `hsl(${hue.toFixed(1)}, ${saturation.toFixed(1)}%, ${lightness.toFixed(1)}%)`;
 }
 
 function buildDeltaLine(value, decimals, unit) {

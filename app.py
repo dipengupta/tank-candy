@@ -100,6 +100,34 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
         return jsonify(payload)
 
+    @app.get("/api/map")
+    def get_map_snapshot():
+        selected_date = request.args.get("date", date.today().isoformat())
+        vehicle_id = request.args.get("vehicle", "sedan")
+
+        try:
+            payload = fuel_service.get_map_snapshot(
+                selected_date=selected_date,
+                vehicle_id=vehicle_id,
+            )
+        except FuelDataError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except Exception:
+            current_app.logger.exception("Map snapshot request failed")
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "Fuel map data is temporarily unavailable. "
+                            "Please retry in a moment."
+                        )
+                    }
+                ),
+                502,
+            )
+
+        return jsonify(payload)
+
     @app.get("/health")
     def health():
         try:

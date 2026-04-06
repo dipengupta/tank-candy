@@ -70,28 +70,12 @@ class FuelDataService:
     def get_quote(
         self, state_code: str, selected_date: str, vehicle_id: str
     ) -> dict[str, Any]:
-        state_code = state_code.upper().strip()
-        if state_code not in STATE_INFO:
-            raise FuelDataError("Select a valid U.S. state or DC.")
-
-        try:
-            requested_date = date.fromisoformat(selected_date)
-        except ValueError as exc:
-            raise FuelDataError("Select a valid date.") from exc
-
-        if requested_date > date.today():
-            raise FuelDataError("Future fuel prices are not available.")
-
-        vehicle = VEHICLE_LOOKUP.get(vehicle_id)
-        if vehicle is None:
-            raise FuelDataError("Select a valid vehicle type.")
-
+        state_code = self._validate_state_code(state_code)
+        requested_date, vehicle = self._validate_request_context(
+            selected_date=selected_date,
+            vehicle_id=vehicle_id,
+        )
         fuel_type = vehicle.fuel_type
-        min_supported = date(1990, 8, 20) if fuel_type == "regular" else date(1994, 3, 21)
-        if requested_date < min_supported:
-            raise FuelDataError(
-                f"{fuel_type.title()} history in this app starts on {min_supported.isoformat()}."
-            )
 
         price_info = self._resolve_price(
             state_code=state_code,
@@ -120,6 +104,38 @@ class FuelDataService:
             "source": price_info["source"].as_dict(),
             "dateNote": price_info["date_note"],
             "isEstimated": price_info["is_estimated"],
+        }
+
+    def get_map_snapshot(self, selected_date: str, vehicle_id: str) -> dict[str, Any]:
+        requested_date, vehicle = self._validate_request_context(
+            selected_date=selected_date,
+            vehicle_id=vehicle_id,
+        )
+        gallons_to_fill = vehicle.tank_capacity * self.REFILL_SHARE
+
+        state_costs = []
+        for state_code, info in STATE_INFO.items():
+            price_info = self._resolve_price(
+                state_code=state_code,
+                requested_date=requested_date,
+                fuel_type=vehicle.fuel_type,
+            )
+            state_costs.append(
+                {
+                    "code": state_code,
+                    "name": info["name"],
+                    "pricePerGallon": price_info["price_per_gallon"],
+                    "totalCost": round(price_info["price_per_gallon"] * gallons_to_fill, 2),
+                    "effectiveDate": price_info["effective_date"],
+                    "isEstimated": price_info["is_estimated"],
+                }
+            )
+
+        return {
+            "requestedDate": requested_date.isoformat(),
+            "vehicle": vehicle.as_dict(),
+            "fuelType": vehicle.fuel_type,
+            "states": state_costs,
         }
 
     def _resolve_price(
@@ -299,6 +315,36 @@ class FuelDataService:
         state_value = latest_snapshot["diesel"] if fuel_type == "diesel" else latest_snapshot["regular"]
         multiplier = float(state_value) / region_value
         return max(0.72, min(1.35, multiplier))
+
+    @staticmethod
+    def _validate_state_code(state_code: str) -> str:
+        normalized = state_code.upper().strip()
+        if normalized not in STATE_INFO:
+            raise FuelDataError("Select a valid U.S. state or DC.")
+        return normalized
+
+    @staticmethod
+    def _validate_request_context(selected_date: str, vehicle_id: str):
+        try:
+            requested_date = date.fromisoformat(selected_date)
+        except ValueError as exc:
+            raise FuelDataError("Select a valid date.") from exc
+
+        if requested_date > date.today():
+            raise FuelDataError("Future fuel prices are not available.")
+
+        vehicle = VEHICLE_LOOKUP.get(vehicle_id)
+        if vehicle is None:
+            raise FuelDataError("Select a valid vehicle type.")
+
+        fuel_type = vehicle.fuel_type
+        min_supported = date(1990, 8, 20) if fuel_type == "regular" else date(1994, 3, 21)
+        if requested_date < min_supported:
+            raise FuelDataError(
+                f"{fuel_type.title()} history in this app starts on {min_supported.isoformat()}."
+            )
+
+        return requested_date, vehicle
 
     @staticmethod
     def _build_headline(vehicle_name: str, state_code: str, total_cost: float) -> str:

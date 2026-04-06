@@ -14,6 +14,19 @@ def build_repository(tmp_path: Path) -> FuelRepository:
     return FuelRepository(tmp_path / "fuel_prices.db")
 
 
+def build_regular_history_series(target_date: str) -> dict[str, dict[str, list[float | str]]]:
+    return {
+        "new_england": {"dates": [target_date], "values": [3.7]},
+        "central_atlantic": {"dates": [target_date], "values": [3.8]},
+        "lower_atlantic": {"dates": [target_date], "values": [3.6]},
+        "midwest": {"dates": [target_date], "values": [3.5]},
+        "gulf_coast": {"dates": [target_date], "values": [3.4]},
+        "rocky_mountain": {"dates": [target_date], "values": [3.75]},
+        "west_coast": {"dates": [target_date], "values": [4.4]},
+        "california": {"dates": [target_date], "values": [4.9]},
+    }
+
+
 def test_bootstrap_from_seed_loads_initial_data(tmp_path: Path) -> None:
     repository = build_repository(tmp_path)
     seed_path = tmp_path / "seed.json"
@@ -187,6 +200,95 @@ def test_service_uses_direct_state_history_when_available(tmp_path: Path) -> Non
     assert quote["isEstimated"] is False
     assert quote["pricePerGallon"] == 3.99
     assert quote["source"]["label"] == "Stored EIA weekly state series"
+
+
+def test_service_builds_cost_map_for_selected_vehicle_and_date(tmp_path: Path) -> None:
+    today = date.today().isoformat()
+    repository = build_repository(tmp_path)
+    repository.upsert_daily_snapshot(
+        today,
+        {
+            "PA": {
+                "regular": 4.0,
+                "mid_grade": 4.35,
+                "premium": 4.7,
+                "diesel": 4.8,
+            },
+            "CA": {
+                "regular": 5.0,
+                "mid_grade": 5.35,
+                "premium": 5.7,
+                "diesel": 5.8,
+            },
+        },
+    )
+    repository.replace_history(
+        "regular",
+        latest_date=today,
+        series=build_regular_history_series(today),
+    )
+
+    service = FuelDataService(repository)
+    snapshot = service.get_map_snapshot(today, "sedan")
+    by_code = {item["code"]: item for item in snapshot["states"]}
+
+    assert snapshot["requestedDate"] == today
+    assert snapshot["fuelType"] == "regular"
+    assert by_code["PA"]["totalCost"] == 55.8
+    assert by_code["CA"]["totalCost"] == 69.75
+
+
+def test_map_endpoint_returns_state_cost_snapshot(tmp_path: Path) -> None:
+    today = date.today().isoformat()
+    seed_path = tmp_path / "seed.json"
+    seed_path.write_text(
+        json.dumps(
+            {
+                "daily_snapshots": [
+                    {
+                        "snapshot_date": today,
+                        "states": {
+                            "PA": {
+                                "regular": 4.0,
+                                "mid_grade": 4.35,
+                                "premium": 4.7,
+                                "diesel": 4.8,
+                            },
+                            "CA": {
+                                "regular": 5.0,
+                                "mid_grade": 5.35,
+                                "premium": 5.7,
+                                "diesel": 5.8,
+                            },
+                        },
+                    }
+                ],
+                "history": {
+                    "regular": {
+                        "latest_date": today,
+                        "series": build_regular_history_series(today),
+                    }
+                },
+            }
+        )
+    )
+    app = create_app(
+        {
+            "TESTING": True,
+            "DATABASE_PATH": tmp_path / "fuel_prices.db",
+            "SEED_DATA_PATH": seed_path,
+        }
+    )
+
+    with app.test_client() as client:
+        response = client.get(f"/api/map?vehicle=sedan&date={today}")
+
+    assert response.status_code == 200
+    assert response.json["requestedDate"] == today
+    assert len(response.json["states"]) >= 2
+    by_code = {item["code"]: item for item in response.json["states"]}
+    assert by_code["PA"]["totalCost"] == 55.8
+    assert by_code["CA"]["totalCost"] == 69.75
 
 
 def test_health_endpoint_reports_database_state(tmp_path: Path) -> None:
