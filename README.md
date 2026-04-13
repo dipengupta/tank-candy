@@ -7,7 +7,7 @@ Single-page Flask app for visualizing what it costs to fill different vehicles, 
 - The web app reads fuel data from SQLite only.
 - A separate scheduler process refreshes upstream data on a schedule.
 - The app ships with a bundled seed dataset at `data/seed_fuel_data.json`, so a brand-new machine still has data to display before the first scheduled refresh runs.
-- Production containers run behind Gunicorn and expose `GET /health` for platform health checks.
+- Production containers run behind Gunicorn, expose `GET /health` for platform health checks, and can run the scheduler in the same service when needed.
 
 ## Data flow
 
@@ -159,7 +159,7 @@ curl http://127.0.0.1:5000/health
 
 ## Deployment workflow
 
-For deployment, you do not need a separate code path from local. The Docker image now starts Gunicorn through `start-web.sh`, reads `PORT` from the environment, and exposes `/health`.
+For deployment, you do not need a separate code path from local. The Docker image now starts the web app and inline scheduler together through `start-service.sh`, reads `PORT` from the environment, and exposes `/health`.
 
 Recommended platform settings:
 
@@ -167,6 +167,7 @@ Recommended platform settings:
 - `DATABASE_PATH=/app/runtime-data/fuel_prices.db`
 - `SEED_DATA_PATH=/app/data/seed_fuel_data.json`
 - `APP_TIMEZONE=America/New_York`
+- `RUN_SCHEDULER_INLINE=1`
 
 Optional Gunicorn tuning for a small hobby app:
 
@@ -174,7 +175,9 @@ Optional Gunicorn tuning for a small hobby app:
 - `GUNICORN_THREADS=4`
 - Increase `WEB_CONCURRENCY` only if you actually see concurrent traffic pressure
 
-Because this app stores data in SQLite, the local Docker setup keeps the scheduler as a separate process sharing the same volume as the web process.
+Because this app stores data in SQLite, the deployed image now supports a single-service mode where the scheduler runs in the same container as the web process. The local Docker Compose setup still keeps the scheduler as a separate process sharing the same volume as the web process.
+
+Keep the hosted deployment at a single web instance when `RUN_SCHEDULER_INLINE=1`, otherwise multiple app instances will each start their own scheduler loop and duplicate refresh work.
 
 For Render specifically, plan around platform disk limits:
 
@@ -183,13 +186,14 @@ For Render specifically, plan around platform disk limits:
 
 That means a Render web service and a separate Render worker or cron job cannot both read and write the same SQLite file on disk. For this project, the practical options are:
 
-- keep it as a simple single-service hobby app and refresh data manually or from within that same service
+- keep it as a simple single-service hobby app and run the scheduler inline in that same service
 - move storage to Postgres if you want a cleaner split between web and background refresh jobs on Render
 
 ## Important files
 
 - `app.py`: Flask entrypoint
 - `gunicorn.conf.py`: production Gunicorn defaults
+- `start-service.sh`: single-service startup for web plus inline scheduler
 - `fuel_service.py`: quote generation from stored data
 - `fuel_repository.py`: SQLite schema and queries
 - `fuel_sync.py`: source scraping/parsing and persistence

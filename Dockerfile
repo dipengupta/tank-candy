@@ -15,7 +15,7 @@ COPY . .
 
 RUN adduser --disabled-password --gecos "" appuser \
     && mkdir -p /app/runtime-data \
-    && chmod +x /app/start-web.sh /app/container-web.sh \
+    && chmod +x /app/start-web.sh /app/start-service.sh /app/container-web.sh \
     && chown -R appuser:appuser /app
 
 USER appuser
@@ -25,4 +25,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.getenv('PORT', '5000')}/health\", timeout=3).read()"]
 
-CMD ["sh", "/app/start-web.sh"]
+CMD ["sh", "/app/start-service.sh"]
