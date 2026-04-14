@@ -2,13 +2,19 @@ name: Render Keepalive
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - name: Show trigger info
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "schedule=${{ github.event.schedule }}"
+          date -u
+
       - name: Ping health endpoint
         run: |
           curl \
@@ -20,5 +26,4 @@ jobs:
             --retry 2 \
             --retry-delay 2 \
             --user-agent "tank-candy-keepalive/1.0" \
-            "https://tank-candy.onrender.com/health" \
-            >/dev/null
+            "https://tank-candy.onrender.com/health"
