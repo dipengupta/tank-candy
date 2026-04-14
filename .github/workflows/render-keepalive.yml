@@ -1,0 +1,24 @@
+name: Render Keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl \
+            --silent \
+            --show-error \
+            --fail \
+            --location \
+            --max-time 20 \
+            --retry 2 \
+            --retry-delay 2 \
+            --user-agent "tank-candy-keepalive/1.0" \
+            "https://tank-candy.onrender.com/health" \
+            >/dev/null
